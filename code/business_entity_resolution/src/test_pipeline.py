@@ -14,6 +14,7 @@ from normalization import (
     normalize_dataframe_parallel
 )
 from feature_engineering import FeatureExtractor
+import tempfile
 
 def test_normalization_unit_cases():
     print("--- 1. Running Normalization Unit Tests ---")
@@ -188,6 +189,35 @@ def test_integration_sample_data():
     assert null_counts == 0, f"Found {null_counts} unhandled NaN values in feature matrix!"
     print(f"  [PASS] Feature matrix verified: shape={feat_df.shape}, unhandled_NaNs=0")
 
+def test_tfidf_serialization_regression():
+    print("--- 5. Running TF-IDF Serialization Regression Test ---")
+    fe1 = FeatureExtractor()
+    corpus = ["apple inc", "pineapple ltd", "tata corporation"]
+    fe1.fit_global_tfidf(corpus)
+    
+    # Transform a test string before save
+    mat1 = fe1.tfidf_vectorizer.transform(["apple corporation"]).toarray()
+    
+    # Save, recreate object, load
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        fe1.save_global_tfidf(tmp_path)
+        
+        fe2 = FeatureExtractor()
+        fe2.load_global_tfidf(tmp_path)
+        
+        # Transform same test string after load
+        mat2 = fe2.tfidf_vectorizer.transform(["apple corporation"]).toarray()
+        
+        # Assert absolute equality
+        if not np.array_equal(mat1, mat2):
+            raise ValueError(f"Serialization regression! Vector before: {mat1}, Vector after: {mat2}")
+        print("  [PASS] Pickled TF-IDF state perfectly matches training state (no drift/leakage)")
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
 def main():
     print("==================================================")
     print("   BUSINESS ENTITY RESOLUTION - TEST & AUDIT SUITE")
@@ -196,6 +226,7 @@ def main():
     test_feature_engineering_unit_cases()
     test_over_normalization_audit()
     test_integration_sample_data()
+    test_tfidf_serialization_regression()
     print("==================================================")
     print("   ALL TESTS & AUDITS PASSED SUCCESSFULLY!")
     print("==================================================")

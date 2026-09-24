@@ -6,6 +6,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
 import rapidfuzz
 from rapidfuzz import fuzz, distance
+import pickle
 
 class FeatureExtractor:
     """
@@ -32,6 +33,19 @@ class FeatureExtractor:
             sublinear_tf=True
         )
         self.tfidf_vectorizer.fit(valid_names)
+        self.is_fitted = True
+
+    def save_global_tfidf(self, filepath: str):
+        """Pickle the fitted TF-IDF vectorizer to disk."""
+        if not self.is_fitted or self.tfidf_vectorizer is None:
+            raise ValueError("Vectorizer is not fitted. Cannot save.")
+        with open(filepath, 'wb') as f:
+            pickle.dump(self.tfidf_vectorizer, f)
+            
+    def load_global_tfidf(self, filepath: str):
+        """Load the fitted TF-IDF vectorizer from disk."""
+        with open(filepath, 'rb') as f:
+            self.tfidf_vectorizer = pickle.load(f)
         self.is_fitted = True
 
     def _get_acronym(self, name: str) -> str:
@@ -144,6 +158,12 @@ class FeatureExtractor:
 
         has_landmark_both = 1.0 if (row.get('has_landmark_1', 0) and row.get('has_landmark_2', 0)) else 0.0
 
+        # Interaction Feature: Both Name AND Address are high simultaneously
+        name_score_clean = max(0.0, name_token_set)
+        addr_score_clean = max(0.0, addr_token_set)
+        name_and_addr_interaction = name_score_clean * addr_score_clean
+        name_and_addr_high_flag = 1.0 if (name_score_clean >= 0.7 and addr_score_clean >= 0.7) else 0.0
+
         return {
             'name_jaro_winkler': float(name_jw),
             'name_token_sort_ratio': float(name_token_sort),
@@ -157,6 +177,8 @@ class FeatureExtractor:
             'pin_code_match': float(pin_code_match),
             'country_match': float(country_match),
             'source_pair_type': float(source_pair_type),
+            'name_and_addr_interaction': float(name_and_addr_interaction),
+            'name_and_addr_high_flag': float(name_and_addr_high_flag),
             'has_name_both': float(has_name_both),
             'has_address_both': float(has_address_both),
             'has_pin_both': float(has_pin_both),
