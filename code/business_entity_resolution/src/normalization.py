@@ -177,7 +177,9 @@ def normalize_dataframe_parallel(df: pd.DataFrame, n_jobs: Optional[int] = None)
         return pd.DataFrame()
 
     if n_jobs is None or n_jobs < 1:
-        n_jobs = max(1, mp.cpu_count() - 1)
+        # Prevent spawning 64+ processes on huge machines which freezes the UI and causes crash-like behavior.
+        # Hard cap to 8 processes to leave cores free for OS and UI.
+        n_jobs = min(8, max(1, mp.cpu_count() - 2))
 
     # If small DataFrame, don't pay process pool overhead
     if len(df) < 5000:
